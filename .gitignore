@@ -1,0 +1,19 @@
+# C#
+csharp/**/bin/
+csharp/**/obj/
+*.feature.cs
+
+# Java
+java/**/target/
+
+# Node / Cypress (also covered per-project, kept here for safety)
+node_modules/
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+# OS / editor
+.DS_Store
+.idea/
+.vs/
+*.swp
