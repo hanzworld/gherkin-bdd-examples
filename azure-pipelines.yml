@@ -1,0 +1,185 @@
+# Builds and tests both language implementations (C# and Java) at all three
+# levels described in the README: unit, integration, and Cypress E2E.
+#
+# The two language stacks are fully independent, so their stages run in
+# parallel (dependsOn: [] on both) to keep pipeline time down.
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  # ---------------------------------------------------------------------
+  # C#: dotnet build + unit/integration tests, then Cypress E2E against
+  # the running API.
+  # ---------------------------------------------------------------------
+  - stage: CSharp
+    dependsOn: []
+    jobs:
+      - job: BuildAndTest
+        steps:
+          - task: UseDotNet@2
+            displayName: 'Install .NET 8 SDK'
+            inputs:
+              packageType: sdk
+              version: '8.0.x'
+
+          - script: dotnet restore BankAccount.slnx
+            displayName: 'dotnet restore'
+            workingDirectory: csharp
+
+          - script: dotnet build BankAccount.slnx --configuration Release --no-restore
+            displayName: 'dotnet build'
+            workingDirectory: csharp
+
+          - script: |
+              dotnet test BankAccount.slnx \
+                --configuration Release \
+                --no-build \
+                --logger trx \
+                --results-directory "$(Agent.TempDirectory)/testresults"
+            displayName: 'dotnet test (unit + integration)'
+            workingDirectory: csharp
+
+          - task: PublishTestResults@2
+            displayName: 'Publish .NET test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: VSTest
+              testResultsFiles: '*.trx'
+              searchFolder: '$(Agent.TempDirectory)/testresults'
+              testRunTitle: 'C# unit + integration tests'
+
+          - task: UseNode@1
+            displayName: 'Install Node.js'
+            inputs:
+              version: '20.x'
+
+          - script: npm ci
+            displayName: 'npm ci (E2E)'
+            workingDirectory: csharp/tests/BankAccount.E2ETests
+
+          - script: |
+              set -e
+              nohup dotnet run --project src/BankAccount.Api --configuration Release \
+                > "$(Agent.TempDirectory)/api.log" 2>&1 &
+              echo "$!" > "$(Agent.TempDirectory)/api.pid"
+
+              echo "Waiting for API to become available on http://localhost:5080 ..."
+              for i in $(seq 1 60); do
+                if curl -sf http://localhost:5080 -o /dev/null; then
+                  echo "API is up."
+                  exit 0
+                fi
+                sleep 2
+              done
+
+              echo "API did not start in time. Log output:"
+              cat "$(Agent.TempDirectory)/api.log"
+              exit 1
+            displayName: 'Start API'
+            workingDirectory: csharp
+
+          - script: npx cypress run
+            displayName: 'Cypress E2E tests'
+            workingDirectory: csharp/tests/BankAccount.E2ETests
+
+          - script: |
+              if [ -f "$(Agent.TempDirectory)/api.pid" ]; then
+                kill "$(cat "$(Agent.TempDirectory)/api.pid")" || true
+              fi
+            displayName: 'Stop API'
+            condition: always()
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Cypress artifacts on failure'
+            condition: failed()
+            inputs:
+              targetPath: 'csharp/tests/BankAccount.E2ETests/cypress'
+              artifact: 'csharp-cypress-output'
+
+  # ---------------------------------------------------------------------
+  # Java: Maven build + unit/integration tests, then Cypress E2E against
+  # the running Spring Boot app.
+  # ---------------------------------------------------------------------
+  - stage: Java
+    dependsOn: []
+    jobs:
+      - job: BuildAndTest
+        steps:
+          - task: JavaToolInstaller@0
+            displayName: 'Install JDK 17'
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: x64
+              jdkSourceOption: PreInstalled
+
+          - task: Maven@4
+            displayName: 'mvn test (unit + integration)'
+            inputs:
+              mavenPomFile: 'java/app/pom.xml'
+              goals: 'test'
+              publishJUnitResults: true
+              testResultsFiles: '**/surefire-reports/TEST-*.xml'
+              testRunTitle: 'Java unit + integration tests'
+
+          - script: mvn --batch-mode package -DskipTests
+            displayName: 'mvn package (build jar for E2E)'
+            workingDirectory: java/app
+
+          - task: UseNode@1
+            displayName: 'Install Node.js'
+            inputs:
+              version: '20.x'
+
+          - script: npm ci
+            displayName: 'npm ci (E2E)'
+            workingDirectory: java/e2e
+
+          - script: |
+              set -e
+              nohup java -jar target/bank-account-app.jar \
+                > "$(Agent.TempDirectory)/api.log" 2>&1 &
+              echo "$!" > "$(Agent.TempDirectory)/api.pid"
+
+              echo "Waiting for API to become available on http://localhost:8080 ..."
+              for i in $(seq 1 60); do
+                if curl -sf http://localhost:8080 -o /dev/null; then
+                  echo "API is up."
+                  exit 0
+                fi
+                sleep 2
+              done
+
+              echo "API did not start in time. Log output:"
+              cat "$(Agent.TempDirectory)/api.log"
+              exit 1
+            displayName: 'Start Spring Boot app'
+            workingDirectory: java/app
+
+          - script: npx cypress run
+            displayName: 'Cypress E2E tests'
+            workingDirectory: java/e2e
+
+          - script: |
+              if [ -f "$(Agent.TempDirectory)/api.pid" ]; then
+                kill "$(cat "$(Agent.TempDirectory)/api.pid")" || true
+              fi
+            displayName: 'Stop Spring Boot app'
+            condition: always()
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Cypress artifacts on failure'
+            condition: failed()
+            inputs:
+              targetPath: 'java/e2e/cypress'
+              artifact: 'java-cypress-output'
