@@ -21,5 +21,11 @@ module.exports = defineConfig({
     specPattern: 'cypress/e2e/features/**/*.feature',
     supportFile: 'cypress/support/e2e.js',
     setupNodeEvents,
+    env: {
+      // Scenarios tagged @manual have no automated implementation - see
+      // scripts/find-manual-tests.mjs and the ManualApproval pipeline
+      // stage. Override with `--env tags="..."` to run them anyway.
+      tags: 'not @manual',
+    },
   },
 });

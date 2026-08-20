@@ -12,6 +12,9 @@ cypress/videos/
 cypress/screenshots/
 cypress/downloads/
 
+# Manual test detection script output (scripts/find-manual-tests.mjs)
+manual-tests-output/
+
 # OS / editor
 .DS_Store
 .idea/

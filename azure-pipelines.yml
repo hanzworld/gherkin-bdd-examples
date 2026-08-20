@@ -3,6 +3,19 @@
 #
 # The two language stacks are fully independent, so their stages run in
 # parallel (dependsOn: [] on both) to keep pipeline time down.
+#
+# Manual tests: a Gherkin scenario with no automated implementation is
+# tagged @manual (see scripts/find-manual-tests.mjs and the two example
+# scenarios in cypress/e2e/features/account.feature). Automated runners are
+# configured to skip @manual scenarios (Reqnroll: `Category!=manual` test
+# filter; Cucumber-JVM: FILTER_TAGS_PROPERTY_NAME on the suite classes;
+# Cypress: `tags: 'not @manual'` in cypress.config.js). If any exist, the
+# pipeline stops after the automated stages and waits for a human to run
+# them and record PASS/FAIL against the `manual-testing` Environment's
+# approval gate. This requires a one-time setup by a project admin:
+#   Project Settings -> Environments -> New -> name it "manual-testing"
+#   -> Approvals and checks -> Approvals -> add the people/groups who are
+#   allowed to sign off on manual testing.
 
 trigger:
   branches:
@@ -19,6 +32,34 @@ pool:
 
 stages:
   # ---------------------------------------------------------------------
+  # Scan every .feature file for @manual scenarios and publish a checklist.
+  # Doesn't depend on / block the automated stages - they run in parallel.
+  # ---------------------------------------------------------------------
+  - stage: DetectManualTests
+    dependsOn: []
+    jobs:
+      - job: Detect
+        steps:
+          - task: UseNode@1
+            displayName: 'Install Node.js'
+            inputs:
+              version: '20.x'
+
+          - script: node scripts/find-manual-tests.mjs "$(Build.ArtifactStagingDirectory)/manual-tests"
+            displayName: 'Scan .feature files for @manual scenarios'
+
+          - script: |
+              COUNT=$(node -e "console.log(require('$(Build.ArtifactStagingDirectory)/manual-tests/manual-test-summary.json').count)")
+              echo "Manual scenario count: $COUNT"
+              echo "##vso[task.setvariable variable=manualTestCount;isOutput=true]$COUNT"
+            name: manualCheck
+            displayName: 'Set manualTestCount output variable'
+
+          - publish: '$(Build.ArtifactStagingDirectory)/manual-tests'
+            artifact: 'manual-test-checklist'
+            displayName: 'Publish manual test checklist'
+
+  # ---------------------------------------------------------------------
   # C#: dotnet build + unit/integration tests, then Cypress E2E against
   # the running API.
   # ---------------------------------------------------------------------
@@ -28,10 +69,16 @@ stages:
       - job: BuildAndTest
         steps:
           - task: UseDotNet@2
-            displayName: 'Install .NET 8 SDK'
+            displayName: 'Install .NET 8 SDK (runtime for net8.0 app/tests)'
             inputs:
               packageType: sdk
               version: '8.0.x'
+
+          - task: UseDotNet@2
+            displayName: 'Install .NET 9 SDK (CLI support for .slnx solutions)'
+            inputs:
+              packageType: sdk
+              version: '9.0.x'
 
           - script: dotnet restore BankAccount.slnx
             displayName: 'dotnet restore'
@@ -45,6 +92,7 @@ stages:
               dotnet test BankAccount.slnx \
                 --configuration Release \
                 --no-build \
+                --filter "Category!=manual" \
                 --logger trx \
                 --results-directory "$(Agent.TempDirectory)/testresults"
             displayName: 'dotnet test (unit + integration)'
@@ -183,3 +231,70 @@ stages:
             inputs:
               targetPath: 'java/e2e/cypress'
               artifact: 'java-cypress-output'
+
+  # ---------------------------------------------------------------------
+  # Only runs if DetectManualTests found @manual scenarios. Pauses on the
+  # 'manual-testing' Environment's approval check (portal-configured, see
+  # header comment) so a human can run those scenarios and record results,
+  # then captures what they entered and publishes it as an artifact.
+  # ---------------------------------------------------------------------
+  - stage: ManualApproval
+    dependsOn:
+      - DetectManualTests
+      - CSharp
+      - Java
+    condition: |
+      and(
+        succeeded('DetectManualTests'),
+        in(dependencies.CSharp.result, 'Succeeded', 'SucceededWithIssues'),
+        in(dependencies.Java.result, 'Succeeded', 'SucceededWithIssues'),
+        gt(dependencies.DetectManualTests.outputs['Detect.manualCheck.manualTestCount'], 0)
+      )
+    jobs:
+      - deployment: WaitForManualTesting
+        displayName: 'Wait for manual test results'
+        environment: manual-testing
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # Deployment jobs don't auto-checkout the repo like regular
+                # jobs do - capture-manual-test-results.mjs lives in it.
+                - checkout: self
+
+                - task: UseNode@1
+                  displayName: 'Install Node.js'
+                  inputs:
+                    version: '20.x'
+
+                - download: current
+                  artifact: manual-test-checklist
+                  displayName: 'Download manual test checklist'
+
+                - script: |
+                    echo "The following scenarios have no automated test and need a human to run them:"
+                    echo ""
+                    cat "$(Pipeline.Workspace)/manual-test-checklist/manual-test-checklist.md"
+                  displayName: 'Show manual test checklist'
+
+                - script: |
+                    node scripts/capture-manual-test-results.mjs \
+                      --org "$(System.CollectionUri)" \
+                      --project "$(System.TeamProject)" \
+                      --build-id "$(Build.BuildId)" \
+                      --summary "$(Pipeline.Workspace)/manual-test-checklist/manual-test-summary.json" \
+                      --out "$(Build.ArtifactStagingDirectory)/manual-test-results"
+                  displayName: 'Capture manual test results from approval comment'
+                  workingDirectory: '$(Build.SourcesDirectory)'
+                  env:
+                    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+                  # Best-effort: scraping the typed comment back out of the
+                  # Approvals API is the one part of this pipeline that
+                  # hasn't been verified against a live org (see script
+                  # header). Never fail the run over it - the checklist and
+                  # the Approvals panel on this run remain authoritative.
+                  continueOnError: true
+
+                - publish: '$(Build.ArtifactStagingDirectory)/manual-test-results'
+                  artifact: 'manual-test-results'
+                  displayName: 'Publish manual test results'

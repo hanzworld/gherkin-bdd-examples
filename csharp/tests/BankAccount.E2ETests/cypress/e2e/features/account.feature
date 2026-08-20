@@ -23,3 +23,13 @@ Feature: Bank account web UI
     And I open an account for "Katherine Johnson" with an opening balance of 100
     When I withdraw 500
     Then I should see an error containing "insufficient funds"
+
+  # AccountNotifier only ever gets a mock in the integration suite (see
+  # BankAccount.IntegrationTests) - nothing in this stack actually sends an
+  # email, and standing up a real inbox for Cypress to poll isn't worth it.
+  # A human has to open Katherine's inbox and check.
+  @manual
+  Scenario: Customer receives an email confirmation after opening an account
+    Given I am on the bank account page
+    When I open an account for "Katherine Johnson" with an opening balance of 100
+    Then a confirmation email should arrive in the customer's inbox within 5 minutes

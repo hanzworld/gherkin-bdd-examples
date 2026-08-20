@@ -1,5 +1,6 @@
 package com.example.bankaccount.integration;
 
+import static io.cucumber.junit.platform.engine.Constants.FILTER_TAGS_PROPERTY_NAME;
 import static io.cucumber.junit.platform.engine.Constants.GLUE_PROPERTY_NAME;
 
 import org.junit.platform.suite.api.ConfigurationParameter;
@@ -13,5 +14,8 @@ import org.junit.platform.suite.api.Suite;
 @ConfigurationParameter(
         key = GLUE_PROPERTY_NAME,
         value = "com.example.bankaccount.integration.steps,com.example.bankaccount.integration.support")
+// @manual scenarios have no automated implementation - see
+// scripts/find-manual-tests.mjs and the ManualApproval pipeline stage.
+@ConfigurationParameter(key = FILTER_TAGS_PROPERTY_NAME, value = "not @manual")
 public class RunCucumberIntegrationTest {
 }

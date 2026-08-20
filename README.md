@@ -49,6 +49,65 @@ refused", ...) — only the step definitions and what's plugged in underneath
 change. That's deliberate: it's the same spec read top-to-bottom by a
 non-technical stakeholder, automated at whatever altitude the test needs.
 
+## Manual tests
+
+Some scenarios can't reasonably be automated - e.g. "the customer receives a
+confirmation email" isn't worth standing up a real inbox for. Tag those
+`@manual` (see the last scenario in each language's `e2e/features/account.feature`).
+Every test runner in this repo is configured to skip `@manual` scenarios:
+
+- Reqnroll turns tags into xUnit traits, so `dotnet test --filter "Category!=manual"` excludes them.
+- The Cucumber-JVM suite classes (`RunCucumberUnitTest`, `RunCucumberIntegrationTest`) set `FILTER_TAGS_PROPERTY_NAME` to `not @manual`.
+- Both Cypress configs default `env.tags` to `not @manual`.
+
+`scripts/find-manual-tests.mjs` scans every `.feature` file for `@manual`
+scenarios and writes a checklist (`node scripts/find-manual-tests.mjs [outDir]`).
+The pipeline (`azure-pipelines.yml`) runs this after the automated stages; if
+any manual scenarios are found, it publishes the checklist as a build
+artifact and pauses on the `manual-testing` environment's approval gate
+until someone runs them by hand and records `MT-001: PASS` / `MT-001: FAIL -
+<notes>` per scenario in the approval comment. That comment is then
+published as its own `manual-test-results` artifact alongside the automated
+test result artifacts.
+
+### One-time pipeline setup
+
+The `ManualApproval` stage gates on an Azure DevOps **Environment**, which
+can't be created from YAML — a project admin has to set it up once, and this
+step is easy to miss because the pipeline will otherwise just fail the first
+time it tries to reach the stage:
+
+1. **Project Settings → Environments → New environment**, name it exactly
+   `manual-testing` (must match `environment:` in `azure-pipelines.yml`).
+2. Open it → **Approvals and checks → Approvals** → add whoever is allowed
+   to sign off on manual testing (a person or a group).
+3. In the check's **Instructions to approvers** field, paste something like:
+   > Open the `manual-test-checklist` artifact from this run, work through
+   > each scenario, then enter one line per scenario in this approval's
+   > comment box before approving: `MT-001: PASS` or
+   > `MT-001: FAIL - <what went wrong>`.
+4. The pipeline's build service account needs permission to read approvals
+   via `$(System.AccessToken)` for the results-capture step — this is
+   typically already the case for the default project Build Service
+   identity, but if that step fails with an auth error, check the Build
+   Service account's project permissions.
+
+### Things to note / known limitation
+
+Capturing the approver's typed comment relies on the Azure DevOps
+**Approvals REST API** (`_apis/pipelines/approvals`), which is one of the
+less-documented corners of the platform — it has **not** been verified
+against a live Azure DevOps organization, only reasoned about from
+documented behaviour. The `capture-manual-test-results.mjs` step is wrapped
+in `continueOnError: true` for this reason: if the API shape doesn't match
+what the script expects, it writes a fallback `manual-test-results.md`
+saying so instead of failing the run, and the **Approvals panel on the
+pipeline run itself remains the authoritative record** of who approved and
+what they typed. Treat the automatically-captured artifact as a convenience,
+not the source of truth, until you've confirmed it works against your own
+organization — the query/parsing logic may need small adjustments (e.g. the
+API version or filter parameters) the first time it runs for real.
+
 ## Running things
 
 ### C#
