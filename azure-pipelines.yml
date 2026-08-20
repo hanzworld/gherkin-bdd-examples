@@ -141,6 +141,15 @@ stages:
             displayName: 'Cypress E2E tests'
             workingDirectory: csharp/tests/BankAccount.E2ETests
 
+          - task: PublishTestResults@2
+            displayName: 'Publish Cypress E2E test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'results/*.xml'
+              searchFolder: 'csharp/tests/BankAccount.E2ETests'
+              testRunTitle: 'C# E2E tests (Cypress)'
+
           - script: |
               if [ -f "$(Agent.TempDirectory)/api.pid" ]; then
                 kill "$(cat "$(Agent.TempDirectory)/api.pid")" || true
@@ -217,6 +226,15 @@ stages:
           - script: npx cypress run
             displayName: 'Cypress E2E tests'
             workingDirectory: java/e2e
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Cypress E2E test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'results/*.xml'
+              searchFolder: 'java/e2e'
+              testRunTitle: 'Java E2E tests (Cypress)'
 
           - script: |
               if [ -f "$(Agent.TempDirectory)/api.pid" ]; then
@@ -298,3 +316,12 @@ stages:
                 - publish: '$(Build.ArtifactStagingDirectory)/manual-test-results'
                   artifact: 'manual-test-results'
                   displayName: 'Publish manual test results'
+
+                - task: PublishTestResults@2
+                  displayName: 'Publish manual test results to Tests tab'
+                  condition: succeededOrFailed()
+                  inputs:
+                    testResultsFormat: JUnit
+                    testResultsFiles: 'manual-test-results.xml'
+                    searchFolder: '$(Build.ArtifactStagingDirectory)/manual-test-results'
+                    testRunTitle: 'Manual tests'

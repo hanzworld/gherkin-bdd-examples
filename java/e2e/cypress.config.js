@@ -14,6 +14,14 @@ async function setupNodeEvents(on, config) {
 }
 
 module.exports = defineConfig({
+  reporter: 'cypress-multi-reporters',
+  reporterOptions: {
+    reporterEnabled: 'spec, mocha-junit-reporter',
+    mochaJunitReporterReporterOptions: {
+      mochaFile: 'results/junit-[hash].xml',
+      toConsole: false,
+    },
+  },
   e2e: {
     // The Spring Boot app must already be running (`mvn spring-boot:run`)
     // before these specs execute - see the root README for run instructions.

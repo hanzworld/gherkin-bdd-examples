@@ -70,6 +70,34 @@ until someone runs them by hand and records `MT-001: PASS` / `MT-001: FAIL -
 published as its own `manual-test-results` artifact alongside the automated
 test result artifacts.
 
+### Test reporting
+
+Every level, in both languages, ends up in Azure DevOps's **Tests** tab for
+the build, not just as artifacts:
+
+| Run | Format | Published by |
+|---|---|---|
+| C# unit + integration | TRX | `PublishTestResults@2` in the `CSharp` stage |
+| Java unit + integration | JUnit XML (Surefire) | `Maven@4`'s `publishJUnitResults` in the `Java` stage |
+| C# E2E (Cypress) | JUnit XML | `PublishTestResults@2` in the `CSharp` stage |
+| Java E2E (Cypress) | JUnit XML | `PublishTestResults@2` in the `Java` stage |
+| Manual | JUnit XML | `PublishTestResults@2` in the `ManualApproval` stage |
+
+Cypress doesn't produce JUnit XML on its own, so both `e2e` projects run it
+through `cypress-multi-reporters` + `mocha-junit-reporter` (see
+`cypress.config.js`) — `spec` still streams pass/fail to the console live,
+while `mocha-junit-reporter` additionally writes `results/junit-*.xml` for
+the pipeline to pick up.
+
+For manual tests, `capture-manual-test-results.mjs` turns the parsed
+`MT-001: PASS` / `MT-001: FAIL - <notes>` lines into a JUnit XML file too —
+one `<testcase>` per `@manual` scenario, `PASS` scenarios clean, `FAIL`
+scenarios carry the notes as the failure message. Critically, a scenario
+that never got a matching line in the approval comment is reported as
+**NOT RECORDED**, itself surfaced as a failing test — so an approver who
+skips a scenario shows up as a red test in the Tests tab rather than the
+scenario just quietly not existing anywhere.
+
 ### One-time pipeline setup
 
 The `ManualApproval` stage gates on an Azure DevOps **Environment**, which
