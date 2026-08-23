@@ -1,0 +1,27 @@
+<h1>Bank Account</h1>
+
+<fieldset id="open-panel">
+  <legend>Open account</legend>
+  <label for="owner">Owner</label>
+  <input id="owner" type="text" placeholder="Ada Lovelace" #ownerInput />
+  <label for="opening-balance">Opening balance</label>
+  <input id="opening-balance" type="number" value="100" #openingBalanceInput />
+  <button id="open-account" (click)="openAccount(ownerInput.value, openingBalanceInput.value)">
+    Open account
+  </button>
+</fieldset>
+
+<fieldset id="balance-panel" [style.display]="accountOpen() ? 'block' : 'none'">
+  <legend>Account <span id="account-id">{{ accountId() }}</span></legend>
+  <p>Balance: <strong id="balance">{{ balance() }}</strong></p>
+
+  <label for="deposit-amount">Deposit amount</label>
+  <input id="deposit-amount" type="number" value="50" #depositInput />
+  <button id="deposit" (click)="deposit(depositInput.value)">Deposit</button>
+
+  <label for="withdraw-amount">Withdraw amount</label>
+  <input id="withdraw-amount" type="number" value="50" #withdrawInput />
+  <button id="withdraw" (click)="withdraw(withdrawInput.value)">Withdraw</button>
+</fieldset>
+
+<p id="error">{{ error() }}</p>

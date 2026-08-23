@@ -14,36 +14,52 @@ language, each exposing the same behaviour to a different kind of test:
 - **HTTP API** — a thin web layer over the domain object, backed by an
   in-memory repository and an `AccountNotifier` collaborator (stands in for
   "send an email / publish an event" — the kind of thing you mock).
-- **Static web UI** (`index.html` + `fetch`) — one page that calls the API,
-  purely so Cypress has a real browser flow to drive instead of hitting JSON
-  endpoints directly.
+- **Web UI** (Angular) — a small Angular app that calls the API via
+  `HttpClient`, purely so Cypress has a real browser flow to drive instead of
+  hitting JSON endpoints directly, and so there's a component worth writing a
+  frontend-level Gherkin test against.
 
 ## Layout
+
+Both language folders share the exact same three top-level names —
+`backend/`, `frontend/`, `e2e/` — so the same mental map works for either
+one. Backend and frontend each keep their tests *inside* themselves, next to
+the code under test (`backend/test/` or `backend/src/test/`, `frontend/test/`);
+only E2E, which exercises backend and frontend together, gets its own
+top-level folder instead of living inside either.
 
 ```
 gherkin-bdd-examples/
 ├── csharp/
-│   ├── src/BankAccount.Api/            ASP.NET Core minimal API + static UI
-│   └── tests/
-│       ├── BankAccount.UnitTests/      xUnit + Reqnroll — tests Account directly
-│       ├── BankAccount.IntegrationTests/ xUnit + Reqnroll + Moq + WebApplicationFactory
-│       └── e2e/                        Cypress + cypress-cucumber-preprocessor
+│   ├── backend/
+│   │   ├── src/BankAccount.Api/          ASP.NET Core minimal API; wwwroot/ is `ng build` output (gitignored)
+│   │   └── test/
+│   │       ├── BankAccount.UnitTests/        xUnit + Reqnroll — tests Account directly
+│   │       └── BankAccount.IntegrationTests/ xUnit + Reqnroll + Moq + WebApplicationFactory
+│   ├── frontend/                         Angular app (calls the API)
+│   │   ├── src/app/                      component + AccountService
+│   │   └── test/                         Jest + jest-cucumber — TestBed, HttpClientTestingModule
+│   └── e2e/                              Cypress + cypress-cucumber-preprocessor
 └── java/
-    ├── app/                            Spring Boot app + static UI (Maven)
-    │   └── src/test/java/.../unit/         JUnit 5 + Cucumber-JVM — tests Account directly
-    │   └── src/test/java/.../integration/  JUnit 5 + Cucumber-JVM + @SpringBootTest + Mockito
-    └── e2e/                            Cypress + cypress-cucumber-preprocessor
+    ├── backend/                          Spring Boot app (Maven); src/main/resources/static/ is `ng build` output (gitignored)
+    │   └── src/test/java/.../unit/           JUnit 5 + Cucumber-JVM — tests Account directly
+    │   └── src/test/java/.../integration/    JUnit 5 + Cucumber-JVM + @SpringBootTest + Mockito
+    ├── frontend/                         Angular app (calls the API) — same component as csharp/frontend
+    │   ├── src/app/
+    │   └── test/                         Jest + jest-cucumber — TestBed, HttpClientTestingModule
+    └── e2e/                              Cypress + cypress-cucumber-preprocessor
 ```
 
-## How the three test types map to Gherkin
+## How the test types map to Gherkin
 
 | Level | Framework | What it exercises | What's mocked |
 |---|---|---|---|
 | Unit | xUnit+Reqnroll / JUnit5+Cucumber-JVM | The `Account` domain class in isolation | Nothing — no I/O at all |
 | Integration | xUnit+Reqnroll+Moq / JUnit5+Cucumber+Spring Boot Test+Mockito | The real HTTP layer, in-process (`WebApplicationFactory` / `@SpringBootTest` + `MockMvc`) | The `AccountNotifier` collaborator, so tests don't depend on email/messaging infra |
+| Frontend | Jest + `jest-cucumber` | The Angular `App` component via `TestBed`, driving the DOM and asserting on rendered output | The network — `HttpClientTestingModule` stands in for the API |
 | E2E | Cypress + `@badeball/cypress-cucumber-preprocessor` | The real app process (`dotnet run` / `spring-boot:run`) through the actual browser UI | Nothing — full stack, real HTTP, real process |
 
-All three levels for a given language reuse the *same scenario shape*
+All levels for a given language reuse the *same scenario shape*
 ("deposit increases the balance", "withdrawing more than the balance is
 refused", ...) — only the step definitions and what's plugged in underneath
 change. That's deliberate: it's the same spec read top-to-bottom by a
@@ -79,6 +95,8 @@ the build, not just as artifacts:
 |---|---|---|
 | C# unit + integration | TRX | `PublishTestResults@2` in the `CSharp` stage |
 | Java unit + integration | JUnit XML (Surefire) | `Maven@4`'s `publishJUnitResults` in the `Java` stage |
+| C# frontend (Jest) | JUnit XML (`jest-junit`) | `PublishTestResults@2` in the `CSharp` stage |
+| Java frontend (Jest) | JUnit XML (`jest-junit`) | `PublishTestResults@2` in the `Java` stage |
 | C# E2E (Cypress) | JUnit XML | `PublishTestResults@2` in the `CSharp` stage |
 | Java E2E (Cypress) | JUnit XML | `PublishTestResults@2` in the `Java` stage |
 | Manual | JUnit XML | `PublishTestResults@2` in the `ManualApproval` stage |
@@ -140,10 +158,12 @@ API version or filter parameters) the first time it runs for real.
 
 ### C#
 ```bash
-cd csharp
+cd csharp/backend
 dotnet test                    # unit + integration tests
-dotnet run --project src/BankAccount.Api   # start the app on http://localhost:5080
-cd tests/e2e && npm install && npx cypress open   # E2E, app must be running
+cd ../frontend && npm install && npm test    # frontend unit tests (Jest)
+npm run build                                # builds into ../backend/src/BankAccount.Api/wwwroot
+cd ../backend && dotnet run --project src/BankAccount.Api   # start the app on http://localhost:5080
+cd ../e2e && npm install && npx cypress open   # E2E, app must be running
 ```
 
 > If the bundled Electron browser fails to launch headless in a locked-down
@@ -152,9 +172,11 @@ cd tests/e2e && npm install && npx cypress open   # E2E, app must be running
 
 ### Java
 ```bash
-cd java/app
+cd java/backend
 mvn test -Dtest=RunCucumberUnitTest          # unit tests only
 mvn test -Dtest=RunCucumberIntegrationTest   # integration tests only
-mvn spring-boot:run                          # start the app on http://localhost:8080
+cd ../frontend && npm install && npm test    # frontend unit tests (Jest)
+npm run build                                # builds into ../backend/src/main/resources/static
+cd ../backend && mvn spring-boot:run          # start the app on http://localhost:8080
 cd ../e2e && npm install && npx cypress open # E2E, app must be running
 ```

@@ -6,6 +6,13 @@ csharp/**/obj/
 # Java
 java/**/target/
 
+# Angular frontends - built by `ng build` (see README "Running things");
+# frontend/.gitignore already covers node_modules/dist/.angular within each
+# Angular project itself, this covers the *build output* consumed by the
+# backend that owns each frontend.
+csharp/backend/src/BankAccount.Api/wwwroot/
+java/backend/src/main/resources/static/
+
 # Node / Cypress (also covered per-project, kept here for safety)
 node_modules/
 cypress/videos/
@@ -13,6 +20,8 @@ cypress/screenshots/
 cypress/downloads/
 csharp/e2e/results/
 java/e2e/results/
+csharp/frontend/results/
+java/frontend/results/
 
 # Manual test detection script output (scripts/find-manual-tests.mjs)
 manual-tests-output/

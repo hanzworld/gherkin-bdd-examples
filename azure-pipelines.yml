@@ -80,6 +80,32 @@ stages:
               packageType: sdk
               version: '9.0.x'
 
+          - task: UseNode@1
+            displayName: 'Install Node.js'
+            inputs:
+              version: '20.x'
+
+          - script: npm ci
+            displayName: 'npm ci (frontend)'
+            workingDirectory: csharp/frontend
+
+          - script: npm test
+            displayName: 'Frontend unit tests (Jest)'
+            workingDirectory: csharp/frontend
+
+          - task: PublishTestResults@2
+            displayName: 'Publish frontend unit test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'results/junit.xml'
+              searchFolder: 'csharp/frontend'
+              testRunTitle: 'C# frontend unit tests (Jest)'
+
+          - script: npm run build
+            displayName: 'ng build (frontend -> wwwroot)'
+            workingDirectory: csharp/frontend
+
           - script: dotnet restore BankAccount.slnx
             displayName: 'dotnet restore'
             workingDirectory: csharp
@@ -179,6 +205,32 @@ stages:
               versionSpec: '17'
               jdkArchitectureOption: x64
               jdkSourceOption: PreInstalled
+
+          - task: UseNode@1
+            displayName: 'Install Node.js'
+            inputs:
+              version: '20.x'
+
+          - script: npm ci
+            displayName: 'npm ci (frontend)'
+            workingDirectory: java/frontend
+
+          - script: npm test
+            displayName: 'Frontend unit tests (Jest)'
+            workingDirectory: java/frontend
+
+          - task: PublishTestResults@2
+            displayName: 'Publish frontend unit test results'
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: JUnit
+              testResultsFiles: 'results/junit.xml'
+              searchFolder: 'java/frontend'
+              testRunTitle: 'Java frontend unit tests (Jest)'
+
+          - script: npm run build
+            displayName: 'ng build (frontend -> static)'
+            workingDirectory: java/frontend
 
           - task: Maven@4
             displayName: 'mvn test (unit + integration)'

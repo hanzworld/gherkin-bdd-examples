@@ -1,0 +1,30 @@
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 32rem;
+  margin: 3rem auto;
+}
+
+fieldset {
+  margin-bottom: 1.5rem;
+}
+
+label {
+  display: block;
+  margin: 0.5rem 0 0.25rem;
+}
+
+input {
+  padding: 0.35rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+}
+
+#error {
+  color: #b00020;
+  min-height: 1.25rem;
+}
