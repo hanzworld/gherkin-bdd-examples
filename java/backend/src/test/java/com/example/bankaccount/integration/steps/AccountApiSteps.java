@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -26,7 +25,10 @@ public class AccountApiSteps {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean
+    // The @MockitoBean declaration lives on CucumberSpringConfiguration -
+    // see the comment there for why. This is a plain by-type autowire of
+    // the (already-mocked) bean from the same context.
+    @Autowired
     private AccountNotifier accountNotifier;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
