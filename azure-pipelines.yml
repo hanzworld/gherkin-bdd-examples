@@ -114,11 +114,11 @@ stages:
 
           - script: npm ci
             displayName: 'npm ci (E2E)'
-            workingDirectory: csharp/tests/BankAccount.E2ETests
+            workingDirectory: csharp/e2e
 
           - script: |
               set -e
-              nohup dotnet run --project src/BankAccount.Api --configuration Release \
+              nohup dotnet run --project backend/src/BankAccount.Api --configuration Release \
                 > "$(Agent.TempDirectory)/api.log" 2>&1 &
               echo "$!" > "$(Agent.TempDirectory)/api.pid"
 
@@ -139,7 +139,7 @@ stages:
 
           - script: npx cypress run
             displayName: 'Cypress E2E tests'
-            workingDirectory: csharp/tests/BankAccount.E2ETests
+            workingDirectory: csharp/e2e
 
           - task: PublishTestResults@2
             displayName: 'Publish Cypress E2E test results'
@@ -147,7 +147,7 @@ stages:
             inputs:
               testResultsFormat: JUnit
               testResultsFiles: 'results/*.xml'
-              searchFolder: 'csharp/tests/BankAccount.E2ETests'
+              searchFolder: 'csharp/e2e'
               testRunTitle: 'C# E2E tests (Cypress)'
 
           - script: |
@@ -161,7 +161,7 @@ stages:
             displayName: 'Publish Cypress artifacts on failure'
             condition: failed()
             inputs:
-              targetPath: 'csharp/tests/BankAccount.E2ETests/cypress'
+              targetPath: 'csharp/e2e/cypress'
               artifact: 'csharp-cypress-output'
 
   # ---------------------------------------------------------------------
@@ -183,7 +183,7 @@ stages:
           - task: Maven@4
             displayName: 'mvn test (unit + integration)'
             inputs:
-              mavenPomFile: 'java/app/pom.xml'
+              mavenPomFile: 'java/backend/pom.xml'
               goals: 'test'
               publishJUnitResults: true
               testResultsFiles: '**/surefire-reports/TEST-*.xml'
@@ -191,7 +191,7 @@ stages:
 
           - script: mvn --batch-mode package -DskipTests
             displayName: 'mvn package (build jar for E2E)'
-            workingDirectory: java/app
+            workingDirectory: java/backend
 
           - task: UseNode@1
             displayName: 'Install Node.js'
@@ -221,7 +221,7 @@ stages:
               cat "$(Agent.TempDirectory)/api.log"
               exit 1
             displayName: 'Start Spring Boot app'
-            workingDirectory: java/app
+            workingDirectory: java/backend
 
           - script: npx cypress run
             displayName: 'Cypress E2E tests'

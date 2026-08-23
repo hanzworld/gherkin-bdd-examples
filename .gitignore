@@ -11,7 +11,7 @@ node_modules/
 cypress/videos/
 cypress/screenshots/
 cypress/downloads/
-csharp/tests/BankAccount.E2ETests/results/
+csharp/e2e/results/
 java/e2e/results/
 
 # Manual test detection script output (scripts/find-manual-tests.mjs)
