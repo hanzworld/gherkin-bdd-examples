@@ -65,6 +65,48 @@ refused", ...) — only the step definitions and what's plugged in underneath
 change. That's deliberate: it's the same spec read top-to-bottom by a
 non-technical stakeholder, automated at whatever altitude the test needs.
 
+## Gherkin scenarios
+
+The same use cases are implemented in both languages — that's the point of
+the repo. At every level, the scenario titles and steps in the C# and Java
+`.feature` files are word-for-word identical (only the prose under `Feature:`
+differs, since it calls out framework-specific details like
+`WebApplicationFactory` vs `@SpringBootTest`).
+
+### Unit — `Account balance management`
+`csharp/backend/test/BankAccount.UnitTests/Features/Account.feature` ·
+`java/backend/src/test/resources/features/unit/account.feature`
+
+- Depositing money increases the balance
+- Withdrawing money within the balance decreases it
+- Withdrawing more than the balance is refused
+- Depositing a negative amount is refused
+
+### Integration — `Bank account API`
+`csharp/backend/test/BankAccount.IntegrationTests/Features/AccountApi.feature` ·
+`java/backend/src/test/resources/features/integration/account_api.feature`
+
+- Depositing over the API updates the balance and notifies
+- Withdrawing over the API updates the balance and notifies
+- Overdrawing over the API is rejected with 400
+
+### Frontend — `Bank account view`
+`csharp/frontend/test/features/account-view.feature` ·
+`java/frontend/test/features/account-view.feature`
+
+- Opening an account shows the starting balance
+- Depositing money updates the balance shown
+- Withdrawing more than the balance shows an error
+
+### E2E — `Bank account web UI`
+`csharp/e2e/cypress/e2e/features/account.feature` ·
+`java/e2e/cypress/e2e/features/account.feature`
+
+- Opening an account shows the starting balance
+- Depositing money updates the balance on screen
+- Withdrawing more than the balance shows an error
+- Customer receives an email confirmation after opening an account `@manual`
+
 ## Manual tests
 
 Some scenarios can't reasonably be automated - e.g. "the customer receives a
